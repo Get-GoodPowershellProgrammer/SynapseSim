@@ -10,6 +10,13 @@ h1 {
     color: #333;
 }
 
+canvas {
+    border: 1px solid #444;
+    background: #fff;
+    display: block;
+    margin: 0 auto 1rem auto;
+}
+
 button {
     padding: 0.5rem 1rem;
     font-size: 1rem;
@@ -19,6 +26,7 @@ button {
     background-color: #007bff;
     color: white;
     transition: background 0.2s;
+    margin: 0 0.5rem;
 }
 
 button:hover {
