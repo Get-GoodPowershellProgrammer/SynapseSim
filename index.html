@@ -63,35 +63,56 @@
             box-shadow: 0 6px 20px rgba(0, 188, 212, 0.4);
         }
         
-        input[type="file"] {
-            margin: 10px;
-            padding: 8px;
-            border: 1px solid #00bcd4;
-            border-radius: 8px;
-            background: rgba(0, 188, 212, 0.1);
-            color: white;
-            cursor: pointer;
-        }
-        
-        input[type="file"]::-webkit-file-upload-button {
-            background: rgba(0, 188, 212, 0.3);
-            border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
-            color: white;
-            cursor: pointer;
-        }
-        
-        .bg-controls {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-        }
         
         .info {
             color: rgba(255, 255, 255, 0.8);
             font-size: 12px;
             margin-top: 10px;
+        }
+        
+        .ap-controls {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 188, 212, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 188, 212, 0.3);
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        
+        .control-group label {
+            color: #00bcd4;
+            font-weight: bold;
+            margin-right: 10px;
+            min-width: 120px;
+        }
+        
+        .control-group input[type="range"] {
+            flex-grow: 1;
+            margin: 0 10px;
+            min-width: 100px;
+        }
+        
+        .control-group .value-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            min-width: 60px;
+            text-align: center;
+            font-family: monospace;
+        }
+        
+        .ap-controls h3 {
+            color: #00bcd4;
+            margin-top: 0;
+            text-align: center;
         }
     </style>
 </head>
@@ -106,11 +127,44 @@
             <button id="resetBtn">Reset Network</button>
         </div>
         
-        <div class="bg-controls">
-            <input type="file" id="bgImageUpload" accept="image/*">
-            <button onclick="generateBrainPattern()">Brain Pattern</button>
-            <button onclick="clearBackground()">Clear Background</button>
-            <div class="info">Upload a background image or generate a neural pattern</div>
+        <div class="ap-controls">
+            <h3>⚡ Action Potential Parameters</h3>
+            
+            <div class="control-group">
+                <label>Firing Threshold:</label>
+                <input type="range" id="thresholdSlider" min="0.1" max="2.0" step="0.1" value="1.0">
+                <span class="value-display" id="thresholdValue">1.0</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Refractory Period:</label>
+                <input type="range" id="refractorySlider" min="100" max="2000" step="100" value="500">
+                <span class="value-display" id="refractoryValue">500ms</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Decay Rate:</label>
+                <input type="range" id="decaySlider" min="0.01" max="0.2" step="0.01" value="0.05">
+                <span class="value-display" id="decayValue">0.05</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Synaptic Strength:</label>
+                <input type="range" id="strengthSlider" min="0.1" max="1.0" step="0.1" value="0.5">
+                <span class="value-display" id="strengthValue">0.5</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Noise Level:</label>
+                <input type="range" id="noiseSlider" min="0.0" max="0.1" step="0.01" value="0.02">
+                <span class="value-display" id="noiseValue">0.02</span>
+            </div>
+            
+            <div class="control-group">
+                <label>Spontaneous Rate:</label>
+                <input type="range" id="spontaneousSlider" min="0.0" max="0.05" step="0.005" value="0.01">
+                <span class="value-display" id="spontaneousValue">0.01</span>
+            </div>
         </div>
     </div>
 
@@ -127,8 +181,17 @@
         let neurons = [];
         let synapses = [];
         let simulationRunning = false;
-        let backgroundImage = null;
         let backgroundPattern = null;
+        
+        // Action Potential Parameters
+        let apParams = {
+            threshold: 1.0,
+            refractoryPeriod: 500,  // milliseconds
+            decayRate: 0.05,
+            synapticStrength: 0.5,
+            noiseLevel: 0.02,
+            spontaneousRate: 0.01
+        };
 
         class Neuron {
             constructor(x, y) {
@@ -136,7 +199,8 @@
                 this.y = y;
                 this.potential = 0; // Neuron's current potential
                 this.synapses = []; // Synapses connected to this neuron
-                this.lastFired = 0; // For visual effects
+                this.lastFired = 0; // For visual effects and refractory period
+                this.refractoryUntil = 0; // Absolute refractory period
             }
 
             // Add a synapse to the list of incoming synapses
@@ -151,49 +215,92 @@
                 // Loop through all incoming synapses
                 this.synapses.forEach(synapse => {
                     // If the presynaptic neuron has fired (potential >= threshold), add the strength
-                    if (synapse.from.potential >= 1) {  // Neuron firing threshold
-                        totalInput += synapse.strength;
+                    if (synapse.from.potential >= apParams.threshold) {
+                        totalInput += synapse.strength * apParams.synapticStrength;
                     }
                 });
 
                 return totalInput; // Return the total synaptic input
             }
 
-            // Update potential based on synaptic input and other factors (optional)
+            // Update potential based on synaptic input and other factors
             updatePotential() {
-                this.potential += this.synapticInput();
-                if (this.potential >= 1) {
-                    this.fire();
-                    this.potential = 0; // Reset after firing
+                const currentTime = Date.now();
+                
+                // Check if neuron is in refractory period
+                if (currentTime < this.refractoryUntil) {
+                    this.potential = 0; // Cannot fire during refractory period
+                    return;
                 }
+                
+                // Add synaptic input
+                this.potential += this.synapticInput();
+                
+                // Add spontaneous activity (random depolarizations)
+                if (Math.random() < apParams.spontaneousRate) {
+                    this.potential += apParams.synapticStrength * 0.5;
+                }
+                
+                // Add noise
+                this.potential += (Math.random() - 0.5) * apParams.noiseLevel;
+                
+                // Apply decay (leak current)
+                this.potential *= (1 - apParams.decayRate);
+                
+                // Check if threshold is reached
+                if (this.potential >= apParams.threshold) {
+                    this.fire();
+                }
+                
+                // Clamp potential to reasonable bounds
+                this.potential = Math.max(0, Math.min(this.potential, apParams.threshold * 1.5));
             }
 
             // Fire the neuron and trigger synapses
             fire() {
-                console.log(`Neuron at (${this.x}, ${this.y}) fired!`);
-                this.lastFired = Date.now();
-                // Here you could trigger the synapse to transmit signals to connected neurons
+                const currentTime = Date.now();
+                console.log(`Neuron at (${this.x}, ${this.y}) fired! Potential: ${this.potential.toFixed(3)}`);
+                
+                this.lastFired = currentTime;
+                this.refractoryUntil = currentTime + apParams.refractoryPeriod;
+                this.potential = 0; // Reset after firing
+                
+                // Trigger connected synapses
                 this.synapses.forEach(synapse => synapse.transmit());
             }
 
             // Method to draw the neuron (for visualization)
             draw(ctx) {
-                const timeSinceFired = Date.now() - this.lastFired;
+                const currentTime = Date.now();
+                const timeSinceFired = currentTime - this.lastFired;
                 const glowIntensity = Math.max(0, 1 - timeSinceFired / 1000);
+                const isRefractory = currentTime < this.refractoryUntil;
                 
                 // Glow effect for recently fired neurons
                 if (glowIntensity > 0) {
                     ctx.beginPath();
                     ctx.arc(this.x, this.y, NEURON_RADIUS + 10, 0, 2 * Math.PI);
-                    ctx.fillStyle = `rgba(0, 188, 212, ${glowIntensity * 0.3})`;
+                    ctx.fillStyle = `rgba(255, 100, 100, ${glowIntensity * 0.4})`;
                     ctx.fill();
                 }
                 
+                // Main neuron body
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, NEURON_RADIUS, 0, 2 * Math.PI);
-                ctx.fillStyle = NEURON_COLOR;
+                
+                // Color based on state
+                if (isRefractory) {
+                    ctx.fillStyle = '#666'; // Darker during refractory period
+                } else {
+                    const intensity = Math.min(this.potential / apParams.threshold, 1);
+                    const red = Math.floor(51 + intensity * 100);
+                    const green = Math.floor(51 + intensity * 50);
+                    const blue = Math.floor(51 + intensity * 30);
+                    ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+                }
                 ctx.fill();
-                ctx.strokeStyle = '#666';
+                
+                ctx.strokeStyle = isRefractory ? '#999' : '#666';
                 ctx.lineWidth = 2;
                 ctx.stroke();
                 
@@ -202,6 +309,17 @@
                 ctx.arc(this.x - 8, this.y - 8, NEURON_RADIUS / 3, 0, 2 * Math.PI);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
                 ctx.fill();
+                
+                // Show potential level as a small bar
+                const barHeight = 20;
+                const barWidth = 4;
+                const potentialRatio = Math.min(this.potential / apParams.threshold, 1);
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(this.x + NEURON_RADIUS + 5, this.y - barHeight/2, barWidth, barHeight);
+                
+                ctx.fillStyle = potentialRatio > 0.8 ? '#ff4444' : '#00bcd4';
+                ctx.fillRect(this.x + NEURON_RADIUS + 5, this.y + barHeight/2 - potentialRatio * barHeight, barWidth, potentialRatio * barHeight);
             }
         }
 
@@ -210,15 +328,38 @@
             constructor(from, to) {
                 this.from = from;
                 this.to = to;
-                this.strength = Math.random(); // Random strength for demo
+                this.strength = 0.3 + Math.random() * 0.7; // Random strength for demo
                 this.activity = 0; // For animation
+                this.delay = Math.random() * 200 + 50; // Synaptic delay in ms
+                this.transmissionQueue = []; // Queue for delayed transmission
             }
 
             transmit() {
+                // Add transmission to queue with delay
+                this.transmissionQueue.push({
+                    time: Date.now() + this.delay,
+                    strength: this.strength * apParams.synapticStrength
+                });
                 this.activity = 1;
             }
 
+            // Process delayed transmissions
+            processTransmissions() {
+                const currentTime = Date.now();
+                this.transmissionQueue = this.transmissionQueue.filter(transmission => {
+                    if (currentTime >= transmission.time) {
+                        // Apply the delayed synaptic input
+                        this.to.potential += transmission.strength;
+                        return false; // Remove from queue
+                    }
+                    return true; // Keep in queue
+                });
+            }
+
             draw(ctx) {
+                // Process any pending transmissions
+                this.processTransmissions();
+                
                 // Animate activity decay
                 this.activity *= 0.95;
                 
@@ -228,7 +369,7 @@
                 
                 const alpha = 0.6 + 0.4 * this.activity;
                 ctx.strokeStyle = `rgba(0, 188, 212, ${alpha})`;
-                ctx.lineWidth = 2 + 4 * this.strength * (0.5 + 0.5 * this.activity);
+                ctx.lineWidth = 1 + 3 * this.strength * (0.5 + 0.5 * this.activity);
                 ctx.stroke();
                 
                 // Add animated pulse effect
@@ -238,34 +379,34 @@
                     const pulseY = this.from.y + (this.to.y - this.from.y) * pulsePos;
                     
                     ctx.beginPath();
-                    ctx.arc(pulseX, pulseY, 5, 0, 2 * Math.PI);
+                    ctx.arc(pulseX, pulseY, 3 + 2 * this.strength, 0, 2 * Math.PI);
                     ctx.fillStyle = `rgba(255, 255, 255, ${this.activity})`;
                     ctx.fill();
                 }
+                
+                // Show pending transmissions as small dots
+                this.transmissionQueue.forEach((transmission, index) => {
+                    const progress = Math.min(1, (Date.now() - (transmission.time - this.delay)) / this.delay);
+                    if (progress > 0 && progress < 1) {
+                        const dotX = this.from.x + (this.to.x - this.from.x) * progress;
+                        const dotY = this.from.y + (this.to.y - this.from.y) * progress;
+                        
+                        ctx.beginPath();
+                        ctx.arc(dotX, dotY, 2, 0, 2 * Math.PI);
+                        ctx.fillStyle = `rgba(255, 200, 0, ${1 - progress})`;
+                        ctx.fill();
+                    }
+                });
             }
         }
 
         // Background image functions
         function drawBackground() {
-            if (backgroundImage) {
-                // Calculate scaling to cover the canvas
-                const scale = Math.max(canvas.width / backgroundImage.width, canvas.height / backgroundImage.height);
-                const scaledWidth = backgroundImage.width * scale;
-                const scaledHeight = backgroundImage.height * scale;
-                const x = (canvas.width - scaledWidth) / 2;
-                const y = (canvas.height - scaledHeight) / 2;
-                
-                // Apply some transparency to the background
-                ctx.globalAlpha = 0.3;
-                ctx.drawImage(backgroundImage, x, y, scaledWidth, scaledHeight);
-                ctx.globalAlpha = 1;
-            } else if (backgroundPattern) {
                 ctx.globalAlpha = 0.4;
                 ctx.fillStyle = backgroundPattern;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.globalAlpha = 1;
             }
-        }
 
         function generateBrainPattern() {
             // Create a neural network-like background pattern
@@ -308,30 +449,13 @@
             }
             
             backgroundPattern = ctx.createPattern(patternCanvas, 'repeat');
-            backgroundImage = null;
         }
 
         function clearBackground() {
-            backgroundImage = null;
             backgroundPattern = null;
         }
 
-        // Handle background image upload
-        document.getElementById('bgImageUpload').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    const img = new Image();
-                    img.onload = function() {
-                        backgroundImage = img;
-                        backgroundPattern = null;
-                    };
-                    img.src = event.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
+        
 
         // Setup demo network
         function createDemoNetwork() {
@@ -393,22 +517,39 @@
         function animateSynapses() {
             if (!simulationRunning) return;
             
-            // Update neuron potentials
+            // Update all neurons
             neurons.forEach(neuron => {
                 neuron.updatePotential();
-                // Add some random noise to keep the simulation interesting
-                if (Math.random() < 0.01) {
-                    neuron.potential += 0.5;
-                }
-            });
-            
-            // Animate synapse strengths for visual effect
-            synapses.forEach(syn => {
-                syn.strength = 0.3 + 0.4 * Math.sin(Date.now() / 1000 + syn.from.x * 0.01);
             });
             
             drawNetwork();
             requestAnimationFrame(animateSynapses);
+        }
+
+        // Initialize slider controls
+        function initializeControls() {
+            const sliders = [
+                { id: 'threshold', param: 'threshold', suffix: '' },
+                { id: 'refractory', param: 'refractoryPeriod', suffix: 'ms' },
+                { id: 'decay', param: 'decayRate', suffix: '' },
+                { id: 'strength', param: 'synapticStrength', suffix: '' },
+                { id: 'noise', param: 'noiseLevel', suffix: '' },
+                { id: 'spontaneous', param: 'spontaneousRate', suffix: '' }
+            ];
+            
+            sliders.forEach(slider => {
+                const sliderElement = document.getElementById(slider.id + 'Slider');
+                const valueElement = document.getElementById(slider.id + 'Value');
+                
+                sliderElement.addEventListener('input', function() {
+                    const value = parseFloat(this.value);
+                    apParams[slider.param] = value;
+                    valueElement.textContent = value + slider.suffix;
+                });
+                
+                // Initialize display
+                valueElement.textContent = apParams[slider.param] + slider.suffix;
+            });
         }
 
         // Event Listeners
@@ -418,6 +559,7 @@
         // Initialize with brain pattern background
         generateBrainPattern();
         createDemoNetwork();
+        initializeControls();
         drawNetwork();
     </script>
 </body>
