@@ -11,14 +11,51 @@ let neurons = [];
 let synapses = [];
 let simulationRunning = false;
 
-// Basic neuron structure
 class Neuron {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.potential = 0; // For future simulation extension
+        this.potential = 0; // Neuron's current potential
+        this.synapses = []; // Synapses connected to this neuron
     }
 
+    // Add a synapse to the list of incoming synapses
+    addSynapse(synapse) {
+        this.synapses.push(synapse);
+    }
+
+    // Calculate the synaptic input for this neuron
+    synapticInput() {
+        let totalInput = 0;
+
+        // Loop through all incoming synapses
+        this.synapses.forEach(synapse => {
+            // If the presynaptic neuron has fired (potential >= threshold), add the strength
+            if (synapse.from.potential >= 1) {  // Neuron firing threshold
+                totalInput += synapse.strength;
+            }
+        });
+
+        return totalInput; // Return the total synaptic input
+    }
+
+    // Update potential based on synaptic input and other factors (optional)
+    updatePotential() {
+        this.potential += this.synapticInput();
+        if (this.potential >= 1) {
+            this.fire();
+            this.potential = 0; // Reset after firing
+        }
+    }
+
+    // Fire the neuron and trigger synapses
+    fire() {
+        console.log(`Neuron at (${this.x}, ${this.y}) fired!`);
+        // Here you could trigger the synapse to transmit signals to connected neurons
+        this.synapses.forEach(synapse => synapse.transmit());
+    }
+
+    // Method to draw the neuron (for visualization)
     draw(ctx) {
         ctx.beginPath();
         ctx.arc(this.x, this.y, NEURON_RADIUS, 0, 2 * Math.PI);

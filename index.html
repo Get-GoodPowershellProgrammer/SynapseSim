@@ -3,16 +3,422 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synapse Simulation Framework</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Synapse Simulation with Background</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            color: #00bcd4;
+        }
+        
+        #synapseCanvas {
+            border: 2px solid #00bcd4;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #00bcd4, #009688);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 188, 212, 0.3);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 188, 212, 0.4);
+        }
+        
+        input[type="file"] {
+            margin: 10px;
+            padding: 8px;
+            border: 1px solid #00bcd4;
+            border-radius: 8px;
+            background: rgba(0, 188, 212, 0.1);
+            color: white;
+            cursor: pointer;
+        }
+        
+        input[type="file"]::-webkit-file-upload-button {
+            background: rgba(0, 188, 212, 0.3);
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .bg-controls {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .info {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Synapse Simulation</h1>
-    <canvas id="synapseCanvas" width="800" height="600"></canvas>
-    <div>
-        <button id="startBtn">Start Simulation</button>
-        <button id="resetBtn">Reset</button>
+    <div class="container">
+        <h1>🧠 Neural Network Synapse Simulation</h1>
+        
+        <canvas id="synapseCanvas" width="800" height="600"></canvas>
+        
+        <div class="controls">
+            <button id="startBtn">Start Simulation</button>
+            <button id="resetBtn">Reset Network</button>
+        </div>
+        
+        <div class="bg-controls">
+            <input type="file" id="bgImageUpload" accept="image/*">
+            <button onclick="generateBrainPattern()">Brain Pattern</button>
+            <button onclick="clearBackground()">Clear Background</button>
+            <div class="info">Upload a background image or generate a neural pattern</div>
+        </div>
     </div>
-    <script src="script.js"></script>
+
+    <script>
+        // Synapse Simulation Framework with Background Image Support
+
+        const canvas = document.getElementById('synapseCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const NEURON_RADIUS = 30;
+        const SYNAPSE_COLOR = '#00bcd4';
+        const NEURON_COLOR = '#333';
+
+        let neurons = [];
+        let synapses = [];
+        let simulationRunning = false;
+        let backgroundImage = null;
+        let backgroundPattern = null;
+
+        class Neuron {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.potential = 0; // Neuron's current potential
+                this.synapses = []; // Synapses connected to this neuron
+                this.lastFired = 0; // For visual effects
+            }
+
+            // Add a synapse to the list of incoming synapses
+            addSynapse(synapse) {
+                this.synapses.push(synapse);
+            }
+
+            // Calculate the synaptic input for this neuron
+            synapticInput() {
+                let totalInput = 0;
+
+                // Loop through all incoming synapses
+                this.synapses.forEach(synapse => {
+                    // If the presynaptic neuron has fired (potential >= threshold), add the strength
+                    if (synapse.from.potential >= 1) {  // Neuron firing threshold
+                        totalInput += synapse.strength;
+                    }
+                });
+
+                return totalInput; // Return the total synaptic input
+            }
+
+            // Update potential based on synaptic input and other factors (optional)
+            updatePotential() {
+                this.potential += this.synapticInput();
+                if (this.potential >= 1) {
+                    this.fire();
+                    this.potential = 0; // Reset after firing
+                }
+            }
+
+            // Fire the neuron and trigger synapses
+            fire() {
+                console.log(`Neuron at (${this.x}, ${this.y}) fired!`);
+                this.lastFired = Date.now();
+                // Here you could trigger the synapse to transmit signals to connected neurons
+                this.synapses.forEach(synapse => synapse.transmit());
+            }
+
+            // Method to draw the neuron (for visualization)
+            draw(ctx) {
+                const timeSinceFired = Date.now() - this.lastFired;
+                const glowIntensity = Math.max(0, 1 - timeSinceFired / 1000);
+                
+                // Glow effect for recently fired neurons
+                if (glowIntensity > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, NEURON_RADIUS + 10, 0, 2 * Math.PI);
+                    ctx.fillStyle = `rgba(0, 188, 212, ${glowIntensity * 0.3})`;
+                    ctx.fill();
+                }
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, NEURON_RADIUS, 0, 2 * Math.PI);
+                ctx.fillStyle = NEURON_COLOR;
+                ctx.fill();
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Add a subtle inner highlight
+                ctx.beginPath();
+                ctx.arc(this.x - 8, this.y - 8, NEURON_RADIUS / 3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fill();
+            }
+        }
+
+        // Basic synapse structure
+        class Synapse {
+            constructor(from, to) {
+                this.from = from;
+                this.to = to;
+                this.strength = Math.random(); // Random strength for demo
+                this.activity = 0; // For animation
+            }
+
+            transmit() {
+                this.activity = 1;
+            }
+
+            draw(ctx) {
+                // Animate activity decay
+                this.activity *= 0.95;
+                
+                ctx.beginPath();
+                ctx.moveTo(this.from.x, this.from.y);
+                ctx.lineTo(this.to.x, this.to.y);
+                
+                const alpha = 0.6 + 0.4 * this.activity;
+                ctx.strokeStyle = `rgba(0, 188, 212, ${alpha})`;
+                ctx.lineWidth = 2 + 4 * this.strength * (0.5 + 0.5 * this.activity);
+                ctx.stroke();
+                
+                // Add animated pulse effect
+                if (this.activity > 0.1) {
+                    const pulsePos = 1 - this.activity;
+                    const pulseX = this.from.x + (this.to.x - this.from.x) * pulsePos;
+                    const pulseY = this.from.y + (this.to.y - this.from.y) * pulsePos;
+                    
+                    ctx.beginPath();
+                    ctx.arc(pulseX, pulseY, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.activity})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Background image functions
+        function drawBackground() {
+            if (backgroundImage) {
+                // Calculate scaling to cover the canvas
+                const scale = Math.max(canvas.width / backgroundImage.width, canvas.height / backgroundImage.height);
+                const scaledWidth = backgroundImage.width * scale;
+                const scaledHeight = backgroundImage.height * scale;
+                const x = (canvas.width - scaledWidth) / 2;
+                const y = (canvas.height - scaledHeight) / 2;
+                
+                // Apply some transparency to the background
+                ctx.globalAlpha = 0.3;
+                ctx.drawImage(backgroundImage, x, y, scaledWidth, scaledHeight);
+                ctx.globalAlpha = 1;
+            } else if (backgroundPattern) {
+                ctx.globalAlpha = 0.4;
+                ctx.fillStyle = backgroundPattern;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function generateBrainPattern() {
+            // Create a neural network-like background pattern
+            const patternCanvas = document.createElement('canvas');
+            patternCanvas.width = 200;
+            patternCanvas.height = 200;
+            const patternCtx = patternCanvas.getContext('2d');
+            
+            // Create gradient background
+            const gradient = patternCtx.createRadialGradient(100, 100, 0, 100, 100, 100);
+            gradient.addColorStop(0, 'rgba(0, 50, 100, 0.1)');
+            gradient.addColorStop(1, 'rgba(0, 20, 40, 0.3)');
+            patternCtx.fillStyle = gradient;
+            patternCtx.fillRect(0, 0, 200, 200);
+            
+            // Add neural network pattern
+            patternCtx.strokeStyle = 'rgba(0, 188, 212, 0.2)';
+            patternCtx.lineWidth = 1;
+            
+            // Draw interconnected nodes
+            for (let i = 0; i < 15; i++) {
+                const x1 = Math.random() * 200;
+                const y1 = Math.random() * 200;
+                
+                for (let j = 0; j < 3; j++) {
+                    const x2 = x1 + (Math.random() - 0.5) * 100;
+                    const y2 = y1 + (Math.random() - 0.5) * 100;
+                    
+                    patternCtx.beginPath();
+                    patternCtx.moveTo(x1, y1);
+                    patternCtx.lineTo(x2, y2);
+                    patternCtx.stroke();
+                }
+                
+                // Draw small nodes
+                patternCtx.beginPath();
+                patternCtx.arc(x1, y1, 2, 0, 2 * Math.PI);
+                patternCtx.fillStyle = 'rgba(0, 188, 212, 0.4)';
+                patternCtx.fill();
+            }
+            
+            backgroundPattern = ctx.createPattern(patternCanvas, 'repeat');
+            backgroundImage = null;
+        }
+
+        function clearBackground() {
+            backgroundImage = null;
+            backgroundPattern = null;
+        }
+
+        // Handle background image upload
+        document.getElementById('bgImageUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        backgroundImage = img;
+                        backgroundPattern = null;
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Setup demo network
+        function createDemoNetwork() {
+            neurons = [
+                new Neuron(200, 200),
+                new Neuron(600, 150),
+                new Neuron(650, 350),
+                new Neuron(450, 450),
+                new Neuron(150, 400),
+                new Neuron(400, 250)
+            ];
+            
+            synapses = [
+                new Synapse(neurons[0], neurons[1]),
+                new Synapse(neurons[1], neurons[2]),
+                new Synapse(neurons[2], neurons[3]),
+                new Synapse(neurons[3], neurons[4]),
+                new Synapse(neurons[4], neurons[0]),
+                new Synapse(neurons[1], neurons[5]),
+                new Synapse(neurons[5], neurons[3]),
+                new Synapse(neurons[0], neurons[5])
+            ];
+            
+            // Connect synapses to neurons
+            synapses.forEach(synapse => {
+                synapse.to.addSynapse(synapse);
+            });
+        }
+
+        function drawNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw background first
+            drawBackground();
+            
+            // Draw synapses
+            synapses.forEach(syn => syn.draw(ctx));
+            
+            // Draw neurons
+            neurons.forEach(neuron => neuron.draw(ctx));
+        }
+
+        function startSimulation() {
+            if (simulationRunning) return;
+            simulationRunning = true;
+            
+            // Trigger initial firing
+            neurons[0].potential = 1;
+            
+            animateSynapses();
+        }
+
+        function resetSimulation() {
+            simulationRunning = false;
+            createDemoNetwork();
+            drawNetwork();
+        }
+
+        function animateSynapses() {
+            if (!simulationRunning) return;
+            
+            // Update neuron potentials
+            neurons.forEach(neuron => {
+                neuron.updatePotential();
+                // Add some random noise to keep the simulation interesting
+                if (Math.random() < 0.01) {
+                    neuron.potential += 0.5;
+                }
+            });
+            
+            // Animate synapse strengths for visual effect
+            synapses.forEach(syn => {
+                syn.strength = 0.3 + 0.4 * Math.sin(Date.now() / 1000 + syn.from.x * 0.01);
+            });
+            
+            drawNetwork();
+            requestAnimationFrame(animateSynapses);
+        }
+
+        // Event Listeners
+        document.getElementById('startBtn').addEventListener('click', startSimulation);
+        document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+
+        // Initialize with brain pattern background
+        generateBrainPattern();
+        createDemoNetwork();
+        drawNetwork();
+    </script>
 </body>
 </html>
