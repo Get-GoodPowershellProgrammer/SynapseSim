@@ -1,22 +1,817 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Neural Network Simulator</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synapse Simulation with Dynamic Editing</title>
+    <style>
+        :root {
+            --bg-main: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            --fg-main: white;
+            --panel-bg: rgba(0, 0, 0, 0.3);
+            --accent: #00bcd4;
+        }
+        [data-theme="light"] {
+            --bg-main: linear-gradient(135deg, #e3f1ff 0%, #c7e0f7 100%);
+            --fg-main: #23272e;
+            --panel-bg: rgba(255,255,255,0.7);
+            --accent: #009688;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            background: var(--bg-main);
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: var(--fg-main);
+            transition: background 0.4s;
+        }
+        .container {
+            text-align: center;
+            background: var(--panel-bg);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            color: var(--accent);
+        }
+        #synapseCanvas {
+            border: 2px solid var(--accent);
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+            width: 90vw;
+            max-width: 1000px;
+            height: 70vh;
+            max-height: 700px;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        button, input[type="file"] {
+            background: linear-gradient(45deg, var(--accent), #009688);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            margin: 5px;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 188, 212, 0.3);
+        }
+        button:hover, input[type="file"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 188, 212, 0.4);
+        }
+        .info {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .ap-controls {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 188, 212, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 188, 212, 0.3);
+            transition: max-height 0.3s, opacity 0.3s;
+            max-height: 800px;
+            opacity: 1;
+            overflow: hidden;
+        }
+        .ap-controls.collapsed {
+            max-height: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .control-group label {
+            color: var(--accent);
+            font-weight: bold;
+            margin-right: 10px;
+            min-width: 120px;
+        }
+        .control-group input[type="range"] {
+            flex-grow: 1;
+            margin: 0 10px;
+            min-width: 100px;
+        }
+        .control-group .value-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            min-width: 60px;
+            text-align: center;
+            font-family: monospace;
+        }
+        .ap-controls h3 {
+            color: var(--accent);
+            margin-top: 0;
+            text-align: center;
+        }
+        #themeToggle {
+            margin-bottom: 10px;
+            accent-color: var(--accent);
+        }
+        #panelToggle {
+            float: right;
+            background: linear-gradient(45deg, #333 20%, var(--accent) 70%);
+            color: white;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        #tooltip {
+            position: absolute;
+            display: none;
+            background: #222;
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            pointer-events: none;
+            z-index: 1000;
+            font-family: monospace;
+            box-shadow: 0 2px 12px #0007;
+        }
+        .edit-controls {
+            margin: 10px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+            align-items: center;
+        }
+        .edit-label {
+            font-size: 14px;
+            color: #fff;
+            background: var(--accent);
+            border-radius: 4px;
+            margin-right: 10px;
+            padding: 2px 10px;
+        }
+        .edit-controls select, .edit-controls input[type="file"] {
+            font-size: 14px;
+            padding: 4px;
+            border-radius: 4px;
+            margin: 0 5px;
+            border: 1px solid #009688;
+        }
+        #importFile {
+            background: #fff;
+            color: #333;
+            box-shadow: none;
+        }
+        .speed-slider-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin: 10px 0;
+        }
+        .speed-slider-group label {
+            color: var(--accent);
+            font-weight: bold;
+        }
+        .speed-slider-group input[type="range"] {
+            min-width: 120px;
+        }
+        .speed-slider-group .value-display {
+            min-width: 50px;
+        }
+    </style>
 </head>
 <body>
-  <div id="toolbar">
-    <button id="addNeuron">Add Neuron</button>
-    <button id="connectNeurons">Connect</button>
-    <button id="removeNeuron">Remove</button>
-    <button id="startStop">Start</button>
-    <button id="exportNetwork">Export</button>
-    <input type="file" id="importNetwork" accept="application/json">
-  </div>
+    <div class="container">
+        <h1>🧠 Neural Network Synapse Simulation</h1>
+        <label>
+            <input type="checkbox" id="themeToggle"> Dark Mode
+        </label>
+        <button id="panelToggle">Toggle Control Panel</button>
+        <div class="edit-controls">
+            <span class="edit-label">Mode:</span>
+            <select id="modeSelector">
+                <option value="simulate">Simulate</option>
+                <option value="edit">Edit</option>
+            </select>
+            <button id="addNeuronBtn">Add Neuron</button>
+            <button id="connectModeBtn">Connect Neurons</button>
+            <button id="removeModeBtn">Remove</button>
+            <button id="exportBtn">Export JSON</button>
+            <input type="file" id="importFile" accept=".json">
+        </div>
+        <div class="speed-slider-group">
+            <label for="speedSlider">Simulation Speed:</label>
+            <input type="range" id="speedSlider" min="0.1" max="2.0" step="0.1" value="1.0">
+            <span class="value-display" id="speedValue">1.0x</span>
+        </div>
+        <canvas id="synapseCanvas"></canvas>
+        <div class="controls">
+            <button id="startBtn">Start Simulation</button>
+            <button id="pauseBtn">Pause</button>
+            <button id="resumeBtn">Resume</button>
+            <button id="resetBtn">Reset Network</button>
+        </div>
+        <div class="ap-controls" id="controlPanel">
+            <h3>⚡ Action Potential Parameters</h3>
+            <div class="control-group">
+                <label>Firing Threshold:</label>
+                <input type="range" id="thresholdSlider" min="0.1" max="2.0" step="0.1" value="1.0">
+                <span class="value-display" id="thresholdValue">1.0</span>
+            </div>
+            <div class="control-group">
+                <label>Refractory Period:</label>
+                <input type="range" id="refractorySlider" min="100" max="2000" step="100" value="500">
+                <span class="value-display" id="refractoryValue">500ms</span>
+            </div>
+            <div class="control-group">
+                <label>Decay Rate:</label>
+                <input type="range" id="decaySlider" min="0.01" max="0.2" step="0.01" value="0.05">
+                <span class="value-display" id="decayValue">0.05</span>
+            </div>
+            <div class="control-group">
+                <label>Synaptic Strength:</label>
+                <input type="range" id="strengthSlider" min="0.1" max="1.0" step="0.1" value="0.5">
+                <span class="value-display" id="strengthValue">0.5</span>
+            </div>
+            <div class="control-group">
+                <label>Noise Level:</label>
+                <input type="range" id="noiseSlider" min="0.0" max="0.1" step="0.01" value="0.02">
+                <span class="value-display" id="noiseValue">0.02</span>
+            </div>
+            <div class="control-group">
+                <label>Spontaneous Rate:</label>
+                <input type="range" id="spontaneousSlider" min="0.0" max="0.05" step="0.005" value="0.01">
+                <span class="value-display" id="spontaneousValue">0.01</span>
+            </div>
+        </div>
+    </div>
+    <div id="tooltip"></div>
+    <script>
+        // Responsive Canvas
+        const canvas = document.getElementById('synapseCanvas');
+        const ctx = canvas.getContext('2d');
+        function resizeCanvas() {
+            canvas.width = Math.floor(window.innerWidth * 0.9);
+            canvas.height = Math.floor(window.innerHeight * 0.7);
+            drawNetwork();
+        }
+        window.addEventListener('resize', resizeCanvas);
 
-  <canvas id="networkCanvas"></canvas>
+        // Theme Toggle
+        const themeToggle = document.getElementById('themeToggle');
+        themeToggle.addEventListener('change', function(e) {
+            document.documentElement.setAttribute('data-theme', e.target.checked ? 'dark' : 'light');
+        });
+        document.documentElement.setAttribute('data-theme', window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        themeToggle.checked = document.documentElement.getAttribute('data-theme') === 'dark';
 
-  <script type="module" src="js/script.js"></script>
+        // Control Panel Toggle
+        document.getElementById('panelToggle').addEventListener('click', function() {
+            document.getElementById('controlPanel').classList.toggle('collapsed');
+        });
+
+        // Tooltip
+        const tooltip = document.getElementById('tooltip');
+        function showTooltip(x, y, html) {
+            tooltip.innerHTML = html;
+            tooltip.style.left = (x + 20) + 'px';
+            tooltip.style.top = (y + 15) + 'px';
+            tooltip.style.display = 'block';
+        }
+        function hideTooltip() {
+            tooltip.style.display = 'none';
+        }
+
+        // Synapse Simulation Framework
+        const NEURON_RADIUS = 30;
+        const SYNAPSE_COLOR = '#00bcd4';
+        const NEURON_COLOR = '#333';
+
+        let neurons = [];
+        let synapses = [];
+        let simulationRunning = false;
+        let simulationPaused = false;
+        let backgroundPattern = null;
+        let simSpeed = 1.0; // multiplier
+
+        // Edit/Draw states
+        let mode = "simulate";
+        let submode = null; // "addNeuron", "connect", "remove", "drag"
+        let draggingNeuron = null;
+        let dragOffset = {x:0,y:0};
+        let connectFromNeuron = null;
+
+        // Action Potential Parameters
+        let apParams = {
+            threshold: 1.0,
+            refractoryPeriod: 500,
+            decayRate: 0.05,
+            synapticStrength: 0.5,
+            noiseLevel: 0.02,
+            spontaneousRate: 0.01
+        };
+
+        class Neuron {
+            constructor(x, y, id) {
+                this.x = x;
+                this.y = y;
+                this.potential = 0;
+                this.synapses = [];
+                this.lastFired = 0;
+                this.refractoryUntil = 0;
+                this.id = id;
+            }
+            addSynapse(synapse) {
+                this.synapses.push(synapse);
+            }
+            synapticInput() {
+                let totalInput = 0;
+                this.synapses.forEach(synapse => {
+                    if (synapse.from.potential >= apParams.threshold) {
+                        totalInput += synapse.strength * apParams.synapticStrength;
+                    }
+                });
+                return totalInput;
+            }
+            updatePotential() {
+                const currentTime = Date.now();
+                if (currentTime < this.refractoryUntil) {
+                    this.potential = 0;
+                    return;
+                }
+                this.potential += this.synapticInput();
+                if (Math.random() < apParams.spontaneousRate) {
+                    this.potential += apParams.synapticStrength * 0.5;
+                }
+                this.potential += (Math.random() - 0.5) * apParams.noiseLevel;
+                this.potential *= (1 - apParams.decayRate);
+                if (this.potential >= apParams.threshold) {
+                    this.fire();
+                }
+                this.potential = Math.max(0, Math.min(this.potential, apParams.threshold * 1.5));
+            }
+            fire() {
+                const currentTime = Date.now();
+                this.lastFired = currentTime;
+                this.refractoryUntil = currentTime + apParams.refractoryPeriod;
+                this.potential = 0;
+                this.synapses.forEach(synapse => synapse.transmit());
+            }
+            draw(ctx) {
+                const currentTime = Date.now();
+                const timeSinceFired = currentTime - this.lastFired;
+                const glowIntensity = Math.max(0, 1 - timeSinceFired / 1000);
+                const isRefractory = currentTime < this.refractoryUntil;
+                // Glow effect
+                if (glowIntensity > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, NEURON_RADIUS + 10, 0, 2 * Math.PI);
+                    ctx.fillStyle = `rgba(255, 100, 100, ${glowIntensity * 0.4})`;
+                    ctx.fill();
+                }
+                // Main neuron
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, NEURON_RADIUS, 0, 2 * Math.PI);
+                if (isRefractory) {
+                    ctx.fillStyle = '#666';
+                } else {
+                    const intensity = Math.min(this.potential / apParams.threshold, 1);
+                    const red = Math.floor(51 + intensity * 100);
+                    const green = Math.floor(51 + intensity * 50);
+                    const blue = Math.floor(51 + intensity * 30);
+                    ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+                }
+                ctx.fill();
+                ctx.strokeStyle = isRefractory ? '#999' : '#666';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                // Subtle inner highlight
+                ctx.beginPath();
+                ctx.arc(this.x - 8, this.y - 8, NEURON_RADIUS / 3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fill();
+                // Potential bar
+                const barHeight = 20;
+                const barWidth = 4;
+                const potentialRatio = Math.min(this.potential / apParams.threshold, 1);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(this.x + NEURON_RADIUS + 5, this.y - barHeight/2, barWidth, barHeight);
+                ctx.fillStyle = potentialRatio > 0.8 ? '#ff4444' : '#00bcd4';
+                ctx.fillRect(this.x + NEURON_RADIUS + 5, this.y + barHeight/2 - potentialRatio * barHeight, barWidth, potentialRatio * barHeight);
+                // Draw neuron id label
+                ctx.font = "bold 15px monospace";
+                ctx.textAlign = "center";
+                ctx.fillStyle = "#fff";
+                ctx.fillText("N" + (this.id + 1), this.x, this.y + 5);
+            }
+        }
+
+        class Synapse {
+            constructor(from, to, strength=null, delay=null) {
+                this.from = from;
+                this.to = to;
+                this.strength = strength ?? (0.3 + Math.random() * 0.7);
+                this.activity = 0;
+                this.delay = delay ?? (Math.random() * 200 + 50);
+                this.transmissionQueue = [];
+            }
+            transmit() {
+                this.transmissionQueue.push({
+                    time: Date.now() + this.delay,
+                    strength: this.strength * apParams.synapticStrength
+                });
+                this.activity = 1;
+            }
+            processTransmissions() {
+                const currentTime = Date.now();
+                this.transmissionQueue = this.transmissionQueue.filter(transmission => {
+                    if (currentTime >= transmission.time) {
+                        this.to.potential += transmission.strength;
+                        return false;
+                    }
+                    return true;
+                });
+            }
+            draw(ctx) {
+                this.processTransmissions();
+                this.activity *= 0.95;
+                ctx.beginPath();
+                ctx.moveTo(this.from.x, this.from.y);
+                ctx.lineTo(this.to.x, this.to.y);
+                const alpha = 0.6 + 0.4 * this.activity;
+                ctx.strokeStyle = `rgba(0, 188, 212, ${alpha})`;
+                ctx.lineWidth = 1 + 3 * this.strength * (0.5 + 0.5 * this.activity);
+                ctx.stroke();
+                if (this.activity > 0.1) {
+                    const pulsePos = 1 - this.activity;
+                    const pulseX = this.from.x + (this.to.x - this.from.x) * pulsePos;
+                    const pulseY = this.from.y + (this.to.y - this.from.y) * pulsePos;
+                    ctx.beginPath();
+                    ctx.arc(pulseX, pulseY, 3 + 2 * this.strength, 0, 2 * Math.PI);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.activity})`;
+                    ctx.fill();
+                }
+                this.transmissionQueue.forEach((transmission, index) => {
+                    const progress = Math.min(1, (Date.now() - (transmission.time - this.delay)) / this.delay);
+                    if (progress > 0 && progress < 1) {
+                        const dotX = this.from.x + (this.to.x - this.from.x) * progress;
+                        const dotY = this.from.y + (this.to.y - this.from.y) * progress;
+                        ctx.beginPath();
+                        ctx.arc(dotX, dotY, 2, 0, 2 * Math.PI);
+                        ctx.fillStyle = `rgba(255, 200, 0, ${1 - progress})`;
+                        ctx.fill();
+                    }
+                });
+            }
+        }
+
+        // Background image functions
+        function drawBackground() {
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = backgroundPattern;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = 1;
+        }
+        function generateBrainPattern() {
+            const patternCanvas = document.createElement('canvas');
+            patternCanvas.width = 200;
+            patternCanvas.height = 200;
+            const patternCtx = patternCanvas.getContext('2d');
+            const gradient = patternCtx.createRadialGradient(100, 100, 0, 100, 100, 100);
+            gradient.addColorStop(0, 'rgba(0, 50, 100, 0.1)');
+            gradient.addColorStop(1, 'rgba(0, 20, 40, 0.3)');
+            patternCtx.fillStyle = gradient;
+            patternCtx.fillRect(0, 0, 200, 200);
+            patternCtx.strokeStyle = 'rgba(0, 188, 212, 0.2)';
+            patternCtx.lineWidth = 1;
+            for (let i = 0; i < 15; i++) {
+                const x1 = Math.random() * 200;
+                const y1 = Math.random() * 200;
+                for (let j = 0; j < 3; j++) {
+                    const x2 = x1 + (Math.random() - 0.5) * 100;
+                    const y2 = y1 + (Math.random() - 0.5) * 100;
+                    patternCtx.beginPath();
+                    patternCtx.moveTo(x1, y1);
+                    patternCtx.lineTo(x2, y2);
+                    patternCtx.stroke();
+                }
+                patternCtx.beginPath();
+                patternCtx.arc(x1, y1, 2, 0, 2 * Math.PI);
+                patternCtx.fillStyle = 'rgba(0, 188, 212, 0.4)';
+                patternCtx.fill();
+            }
+            backgroundPattern = ctx.createPattern(patternCanvas, 'repeat');
+        }
+
+        function createDemoNetwork() {
+            const w = canvas.width, h = canvas.height;
+            neurons = [
+                new Neuron(w*0.25, h*0.30, 0),
+                new Neuron(w*0.75, h*0.22, 1),
+                new Neuron(w*0.80, h*0.60, 2),
+                new Neuron(w*0.56, h*0.82, 3),
+                new Neuron(w*0.18, h*0.75, 4),
+                new Neuron(w*0.45, h*0.45, 5)
+            ];
+            synapses = [
+                new Synapse(neurons[0], neurons[1]),
+                new Synapse(neurons[1], neurons[2]),
+                new Synapse(neurons[2], neurons[3]),
+                new Synapse(neurons[3], neurons[4]),
+                new Synapse(neurons[4], neurons[0]),
+                new Synapse(neurons[1], neurons[5]),
+                new Synapse(neurons[5], neurons[3]),
+                new Synapse(neurons[0], neurons[5])
+            ];
+            synapses.forEach(synapse => {
+                synapse.to.addSynapse(synapse);
+            });
+        }
+
+        function drawNetwork() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            synapses.forEach(syn => syn.draw(ctx));
+            neurons.forEach(neuron => neuron.draw(ctx));
+            // If connecting, highlight neuron for user
+            if (mode === "edit" && submode === "connect" && connectFromNeuron) {
+                ctx.beginPath();
+                ctx.arc(connectFromNeuron.x, connectFromNeuron.y, NEURON_RADIUS + 10, 0, 2 * Math.PI);
+                ctx.strokeStyle = "orange";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        function startSimulation() {
+            if (simulationRunning) return;
+            simulationRunning = true;
+            simulationPaused = false;
+            neurons[0] && (neurons[0].potential = 1);
+            animateSynapses();
+        }
+        function pauseSimulation() {
+            simulationPaused = true;
+        }
+        function resumeSimulation() {
+            if (!simulationRunning) return;
+            simulationPaused = false;
+            animateSynapses();
+        }
+        function resetSimulation() {
+            simulationRunning = false;
+            simulationPaused = false;
+            createDemoNetwork();
+            drawNetwork();
+        }
+
+        // Animation loop with speed control
+        let lastFrame = 0;
+        function animateSynapses(ts) {
+            if (!simulationRunning || simulationPaused) return;
+            const now = performance.now();
+            const interval = 1000/(60*simSpeed);
+            if (now - lastFrame > interval) {
+                neurons.forEach(neuron => neuron.updatePotential());
+                drawNetwork();
+                lastFrame = now;
+            }
+            requestAnimationFrame(animateSynapses);
+        }
+
+        // Sliders and Controls
+        function initializeControls() {
+            const sliders = [
+                { id: 'threshold', param: 'threshold', suffix: '' },
+                { id: 'refractory', param: 'refractoryPeriod', suffix: 'ms' },
+                { id: 'decay', param: 'decayRate', suffix: '' },
+                { id: 'strength', param: 'synapticStrength', suffix: '' },
+                { id: 'noise', param: 'noiseLevel', suffix: '' },
+                { id: 'spontaneous', param: 'spontaneousRate', suffix: '' }
+            ];
+            sliders.forEach(slider => {
+                const sliderElement = document.getElementById(slider.id + 'Slider');
+                const valueElement = document.getElementById(slider.id + 'Value');
+                sliderElement.addEventListener('input', function() {
+                    const value = parseFloat(this.value);
+                    apParams[slider.param] = value;
+                    valueElement.textContent = value + slider.suffix;
+                });
+                valueElement.textContent = apParams[slider.param] + slider.suffix;
+            });
+
+            // Simulation speed
+            const speedSlider = document.getElementById('speedSlider');
+            const speedValue = document.getElementById('speedValue');
+            speedSlider.addEventListener('input', function() {
+                simSpeed = parseFloat(this.value);
+                speedValue.textContent = simSpeed + "x";
+            });
+            speedValue.textContent = simSpeed + "x";
+        }
+
+        // Tooltip on neuron hover
+        canvas.addEventListener('mousemove', function(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouse = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            let found = false;
+            for (let neuron of neurons) {
+                if (Math.hypot(neuron.x - mouse.x, neuron.y - mouse.y) < NEURON_RADIUS) {
+                    showTooltip(e.clientX, e.clientY, `
+                        <b>Neuron N${neuron.id + 1}</b><br>
+                        Potential: ${neuron.potential.toFixed(3)}<br>
+                        Last fired: ${neuron.lastFired ? (new Date(neuron.lastFired)).toLocaleTimeString() : 'Never'}
+                    `);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) hideTooltip();
+        });
+        canvas.addEventListener('mouseleave', hideTooltip);
+
+        // Edit Mode controls
+        document.getElementById("modeSelector").addEventListener("change", e => {
+            mode = e.target.value;
+            submode = null;
+            connectFromNeuron = null;
+            drawNetwork();
+        });
+        document.getElementById("addNeuronBtn").addEventListener("click", () => {
+            if (mode === "edit") submode = "addNeuron";
+        });
+        document.getElementById("connectModeBtn").addEventListener("click", () => {
+            if (mode === "edit") submode = "connect";
+            connectFromNeuron = null;
+        });
+        document.getElementById("removeModeBtn").addEventListener("click", () => {
+            if (mode === "edit") submode = "remove";
+        });
+
+        // Draggable Neurons & Dynamic Editing
+        canvas.addEventListener("mousedown", function(e) {
+            if (mode !== "edit") return;
+            const rect = canvas.getBoundingClientRect();
+            const mouse = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            if (submode === "addNeuron") {
+                const newId = neurons.length;
+                const neuron = new Neuron(mouse.x, mouse.y, newId);
+                neurons.push(neuron);
+                drawNetwork();
+            } else if (submode === "connect") {
+                for (let neuron of neurons) {
+                    if (Math.hypot(neuron.x - mouse.x, neuron.y - mouse.y) < NEURON_RADIUS) {
+                        if (!connectFromNeuron) {
+                            connectFromNeuron = neuron;
+                            drawNetwork();
+                        } else if (connectFromNeuron !== neuron) {
+                            const syn = new Synapse(connectFromNeuron, neuron);
+                            synapses.push(syn);
+                            neuron.addSynapse(syn);
+                            connectFromNeuron = null;
+                            drawNetwork();
+                        }
+                        return;
+                    }
+                }
+            } else if (submode === "remove") {
+                // Remove neuron if clicked
+                for (let i = 0; i < neurons.length; i++) {
+                    if (Math.hypot(neurons[i].x - mouse.x, neurons[i].y - mouse.y) < NEURON_RADIUS) {
+                        const id = neurons[i].id;
+                        // Remove synapses connected to/from this neuron
+                        synapses = synapses.filter(s => s.from !== neurons[i] && s.to !== neurons[i]);
+                        neurons.splice(i,1);
+                        // Renumber ids
+                        neurons.forEach((n,j) => n.id = j);
+                        drawNetwork();
+                        return;
+                    }
+                }
+                // Remove synapse if clicked near line
+                for (let i = 0; i < synapses.length; i++) {
+                    const s = synapses[i];
+                    // Point-line distance
+                    const a = {x:s.from.x, y:s.from.y}, b={x:s.to.x, y:s.to.y};
+                    const ap = {x:mouse.x-a.x, y:mouse.y-a.y};
+                    const ab = {x:b.x-a.x, y:b.y-a.y};
+                    const ab2 = ab.x*ab.x + ab.y*ab.y;
+                    const ap_ab = ap.x*ab.x + ap.y*ab.y;
+                    const t = Math.max(0, Math.min(1, ab2 ? ap_ab/ab2 : 0));
+                    const closest = {x:a.x+ab.x*t, y:a.y+ab.y*t};
+                    const dist = Math.hypot(mouse.x-closest.x, mouse.y-closest.y);
+                    if (dist < 10) {
+                        synapses.splice(i,1);
+                        drawNetwork();
+                        return;
+                    }
+                }
+            } else {
+                // Dragging neuron
+                for (let neuron of neurons) {
+                    if (Math.hypot(neuron.x - mouse.x, neuron.y - mouse.y) < NEURON_RADIUS) {
+                        draggingNeuron = neuron;
+                        dragOffset.x = mouse.x - neuron.x;
+                        dragOffset.y = mouse.y - neuron.y;
+                        submode = "drag";
+                        break;
+                    }
+                }
+            }
+        });
+        canvas.addEventListener("mousemove", function(e) {
+            if (submode === "drag" && draggingNeuron) {
+                const rect = canvas.getBoundingClientRect();
+                draggingNeuron.x = e.clientX - rect.left - dragOffset.x;
+                draggingNeuron.y = e.clientY - rect.top - dragOffset.y;
+                drawNetwork();
+            }
+        });
+        canvas.addEventListener("mouseup", function(e) {
+            if (submode === "drag" && draggingNeuron) {
+                draggingNeuron = null;
+                submode = null;
+                drawNetwork();
+            }
+        });
+
+        // Export/Import JSON
+        function exportNetworkJSON() {
+            const neuronData = neurons.map(n => ({
+                x: n.x, y: n.y, id: n.id
+            }));
+            const synapseData = synapses.map(s => ({
+                from: s.from.id, to: s.to.id, strength: s.strength, delay: s.delay
+            }));
+            const json = JSON.stringify({neurons: neuronData, synapses: synapseData, params: {...apParams}});
+            const blob = new Blob([json], {type:"application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "network.json";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        document.getElementById("exportBtn").addEventListener("click", exportNetworkJSON);
+
+        document.getElementById("importFile").addEventListener("change", function(e){
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const obj = JSON.parse(evt.target.result);
+                    neurons = obj.neurons.map(n => new Neuron(n.x, n.y, n.id));
+                    synapses = obj.synapses.map(s => new Synapse(neurons[s.from], neurons[s.to], s.strength, s.delay));
+                    synapses.forEach(syn => {
+                        syn.to.addSynapse(syn);
+                    });
+                    Object.assign(apParams, obj.params || {});
+                    drawNetwork();
+                    initializeControls();
+                } catch {
+                    alert("Invalid JSON.");
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = "";
+        });
+
+        // Simulation controls
+        document.getElementById('startBtn').addEventListener('click', startSimulation);
+        document.getElementById('pauseBtn').addEventListener('click', pauseSimulation);
+        document.getElementById('resumeBtn').addEventListener('click', resumeSimulation);
+        document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+
+        // Initial setup
+        generateBrainPattern();
+        resizeCanvas();
+        createDemoNetwork();
+        initializeControls();
+        drawNetwork();
+    </script>
 </body>
 </html>
