@@ -54,6 +54,8 @@ function pointLineDistance(px, py, x1, y1, x2, y2) {
 
 // --- Classes ---
 
+const NEURON_RADIUS = 30;
+
 class Neuron {
     constructor(x, y, id) {
         this.x = x;
@@ -79,18 +81,23 @@ class Neuron {
         });
         return totalInput;
     }
-    updatePotential(params) {
+    updatePotential(params, dt = 1/60) {
+        // dt: seconds
         const currentTime = Date.now();
         if (currentTime < this.refractoryUntil) {
             this.potential = 0;
             return;
         }
         this.potential += this.synapticInput(params);
-        if (Math.random() < params.spontaneousRate) {
+
+        if (Math.random() < params.spontaneousRate * dt) {
             this.potential += params.synapticStrength * 0.5;
         }
-        this.potential += (Math.random() - 0.5) * params.noiseLevel;
-        this.potential *= (1 - params.decayRate);
+        this.potential += (Math.random() - 0.5) * params.noiseLevel * dt;
+
+        // Decay rate: scale by dt to be frame-rate independent
+        this.potential *= (1 - params.decayRate * dt);
+
         if (this.potential >= params.threshold) {
             this.fire(params);
         }
@@ -213,7 +220,7 @@ class Network {
         this.simulationRunning = false;
         this.simulationPaused = false;
         this.simSpeed = 1.0;
-        this.lastFrame = 0;
+        this.lastFrame = null;
         // UI edit state
         this.mode = "simulate";
         this.submode = null;
@@ -299,6 +306,7 @@ class Network {
         if (this.simulationRunning) return;
         this.simulationRunning = true;
         this.simulationPaused = false;
+        this.lastFrame = null;
         this.neurons[0] && (this.neurons[0].potential = 1);
         this.animateSynapses();
     }
@@ -319,14 +327,26 @@ class Network {
 
     animateSynapses() {
         if (!this.simulationRunning || this.simulationPaused) return;
+        // Use deltaTime for smooth simulation speed scaling
         const now = performance.now();
-        const interval = 1000/(60*this.simSpeed);
-        if (now - this.lastFrame > interval) {
-            this.neurons.forEach(neuron => neuron.updatePotential(this.params));
-            this.redraw();
-            this.lastFrame = now;
-        }
+        // If this is first frame, initialize lastFrame
+        if (!this.lastFrame) this.lastFrame = now;
+        const deltaTime = (now - this.lastFrame) * this.simSpeed; // ms * speed
+        this.lastFrame = now;
+
+        // Advance simulation: pass deltaTime in seconds
+        this.updateSimulation(deltaTime / 1000);
+
+        this.redraw();
         requestAnimationFrame(() => this.animateSynapses());
+    }
+
+    updateSimulation(dt) {
+        // dt is in seconds, so dt = 0.016 at 60fps
+        // All physics are frame-rate independent
+        this.neurons.forEach(neuron => {
+            neuron.updatePotential(this.params, dt);
+        });
     }
 
     setParamsFromUI() {
@@ -482,7 +502,45 @@ class Network {
     }
 }
 
-// --- Setup and Event Bindings ---
+// --- DOM & Event Bindings ---
+
+const canvas = document.getElementById('synapseCanvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+// Responsive Canvas
+function resizeCanvas() {
+    canvas.width = Math.floor(window.innerWidth * 0.9);
+    canvas.height = Math.floor(window.innerHeight * 0.7);
+    network && network.redraw();
+}
+window.addEventListener('resize', resizeCanvas);
+
+// Theme Toggle
+const themeToggle = document.getElementById('themeToggle');
+themeToggle.addEventListener('change', function(e) {
+    document.documentElement.setAttribute('data-theme', e.target.checked ? 'dark' : 'light');
+});
+document.documentElement.setAttribute('data-theme', window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+themeToggle.checked = document.documentElement.getAttribute('data-theme') === 'dark';
+
+// Control Panel Toggle
+document.getElementById('panelToggle').addEventListener('click', function() {
+    document.getElementById('controlPanel').classList.toggle('collapsed');
+});
+
+// Tooltip functions
+function showTooltip(x, y, html) {
+    tooltip.innerHTML = html;
+    tooltip.style.left = (x + 20) + 'px';
+    tooltip.style.top = (y + 15) + 'px';
+    tooltip.style.display = 'block';
+}
+function hideTooltip() {
+    tooltip.style.display = 'none';
+}
+
+// Network setup
 let network = new Network(canvas, ctx);
 
 function initializeControls() {
